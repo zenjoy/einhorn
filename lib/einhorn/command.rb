@@ -309,13 +309,13 @@ module Einhorn
       old_workers = Einhorn::WorkerPool.old_workers
       if !Einhorn::State.upgrading && old_workers.length > 0
         Einhorn.log_info("Killing off #{old_workers.length} old workers.")
-        signal_all("USR2", old_workers)
+        signal_all("QUIT", old_workers)
       end
 
       if acked > target
         excess = Einhorn::WorkerPool.acked_unsignaled_modern_workers[0...(acked-target)]
         Einhorn.log_info("Have too many workers at the current version, so killing off #{excess.length} of them.")
-        signal_all("USR2", excess)
+        signal_all("QUIT", excess)
       end
     end
 

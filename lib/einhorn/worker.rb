@@ -108,7 +108,7 @@ module Einhorn
 
     # Call this to handle graceful shutdown requests to your app.
     def self.graceful_shutdown(&blk)
-      Signal.trap('USR2', &blk)
+      Signal.trap('QUIT', &blk)
     end
 
     private

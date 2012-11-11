@@ -102,7 +102,7 @@ worker code on disk and running
     > upgrade
 
 Once the new workers have been spawned, Einhorn will send each old
-worker a SIGUSR2. SIGUSR2 should be interpreted as a request for a
+worker a QUIT. QUIT should be interpreted as a request for a
 graceful shutdown.
 
 ### ACKs

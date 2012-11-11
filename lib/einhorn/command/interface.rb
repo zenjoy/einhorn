@@ -148,7 +148,7 @@ module Einhorn::Command
     ## Signals
     def self.install_handlers
       Signal.trap("INT") do
-        Einhorn::Command.signal_all("USR2", Einhorn::WorkerPool.workers)
+        Einhorn::Command.signal_all("QUIT", Einhorn::WorkerPool.workers)
         Einhorn::State.respawn = false
       end
       Signal.trap("TERM") do
@@ -166,12 +166,12 @@ module Einhorn::Command
       Signal.trap("ALRM") {Einhorn::Command.full_upgrade}
       Signal.trap("CHLD") {Einhorn::Event.break_loop}
       Signal.trap("USR2") do
-        Einhorn::Command.signal_all("USR2", Einhorn::WorkerPool.workers)
+        Einhorn::Command.signal_all("QUIT", Einhorn::WorkerPool.workers)
         Einhorn::State.respawn = false
       end
       at_exit do
         if Einhorn::State.kill_children_on_exit && Einhorn::TransientState.whatami == :master
-          Einhorn::Command.signal_all("USR2", Einhorn::WorkerPool.workers)
+          Einhorn::Command.signal_all("QUIT", Einhorn::WorkerPool.workers)
           Einhorn::State.respawn = false
         end
       end
@@ -340,7 +340,7 @@ EOF
       results.join("\n")
     end
 
-    command 'die', 'Send SIGNAL (default: SIGUSR2) to all workers, stop spawning new ones, and exit once all workers die (args: [SIGNAL])' do |conn, request|
+    command 'die', 'Send SIGNAL (default: QUIT) to all workers, stop spawning new ones, and exit once all workers die (args: [SIGNAL])' do |conn, request|
       # TODO: dedup this code with signal
       args = request['args']
       if message = validate_args(args)
@@ -353,7 +353,7 @@ EOF
         next message
       end
 
-      signal = args[0] || "USR2"
+      signal = args[0] || "QUIT"
 
       response = Einhorn::Command.signal_all(signal, Einhorn::WorkerPool.workers)
       Einhorn::State.respawn = false
