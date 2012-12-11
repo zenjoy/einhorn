@@ -253,6 +253,14 @@ module Einhorn
 
     def self.prepare_child_environment
       # This is run from the child
+      if Einhorn::State.working_directory
+        Einhorn.log_info("Setting the working directory to: '#{Einhorn::State.working_directory}'")
+        Dir.chdir(Einhorn::State.working_directory)
+      end
+      if defined?(Gem) && Gem.respond_to?(:refresh)
+        Einhorn.log_info("Refreshing Gem list")
+        Gem.refresh
+      end
       ENV['EINHORN_MASTER_PID'] = Process.ppid.to_s
       ENV['EINHORN_SOCK_PATH'] = Einhorn::Command::Interface.socket_path
       if Einhorn::State.command_socket_as_fd

@@ -57,7 +57,8 @@ module Einhorn
         :pidfile => nil,
         :lockfile => nil,
         :consecutive_deaths_before_ack => 0,
-        :last_upgraded => nil
+        :last_upgraded => nil,
+        :working_directory => nil
       }
     end
   end

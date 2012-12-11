@@ -211,6 +211,10 @@ if true # $0 == __FILE__
       Einhorn::State.lockfile = lockfile
     end
 
+    opts.on('-w PATH', '--working-dir PATH', 'The working directory of the script to be executed') do |working_directory|
+      Einhorn::State.working_directory = working_directory
+    end
+
     opts.on('-g', '--command-socket-as-fd', 'Leave the command socket open as a file descriptor, passed in the EINHORN_SOCK_FD environment variable. This allows your worker processes to ACK without needing to know where on the filesystem the command socket lives.') do
       Einhorn::State.command_socket_as_fd = true
     end
