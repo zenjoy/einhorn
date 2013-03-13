@@ -59,6 +59,7 @@ module Einhorn
         :consecutive_deaths_before_ack => 0,
         :last_upgraded => nil,
         :working_directory => nil
+        :nice => {:master => nil, :worker => nil, :renice_cmd => '/usr/bin/renice'}
       }
     end
   end
@@ -82,10 +83,33 @@ module Einhorn
 
   def self.restore_state(state)
     parsed = YAML.load(state)
-    Einhorn::State.state = parsed[:state]
+    updated_state, message = update_state(parsed[:state])
+    Einhorn::State.state = updated_state
     Einhorn::Event.restore_persistent_descriptors(parsed[:persistent_descriptors])
-    # Do this after setting state so verbosity is right9
+    # Do this after setting state so verbosity is right
     Einhorn.log_info("Using loaded state: #{parsed.inspect}")
+    Einhorn.log_info(message) if message
+  end
+
+  def self.update_state(old_state)
+    # TODO: handle format updates somehow? (probably need to write
+    # special-case code for each)
+    updated_state = old_state.dup
+    default = Einhorn::State.default_state
+    added_keys = default.keys - old_state.keys
+    deleted_keys = old_state.keys - default.keys
+    return [updated_state, nil] if added_keys.length == 0 && deleted_keys.length == 0
+
+    added_keys.each {|key| updated_state[key] = default[key]}
+    deleted_keys.each {|key| updated_state.delete(key)}
+
+    message = []
+    message << "adding default values for #{added_keys.inspect}"
+    message << "deleting values for #{deleted_keys.inspect}"
+    message = "State format has changed: #{message.join(', ')}"
+
+    # Can't print yet, since state hasn't been set, so we pass along the message.
+    [updated_state, message]
   end
 
   def self.print_state
@@ -223,6 +247,25 @@ module Einhorn
     Einhorn::State.cmd_name ? "ruby #{Einhorn::State.cmd_name}" : Einhorn::State.orig_cmd.join(' ')
   end
 
+  def self.renice_self
+    whatami = Einhorn::TransientState.whatami
+    return unless nice = Einhorn::State.nice[whatami]
+    pid = $$
+
+    unless nice.kind_of?(Fixnum)
+      raise "Nice must be a fixnum: #{nice.inspect}"
+    end
+
+    # Explicitly don't shellescape the renice command
+    cmd = "#{Einhorn::State.nice[:renice_cmd]} #{nice} -p #{pid}"
+    log_info("Running #{cmd.inspect} to renice self to level #{nice}")
+    `#{cmd}`
+    unless $?.exitstatus == 0
+      # TODO: better error handling?
+      log_error("Renice command exited with status: #{$?.inspect}, but continuing on anyway.")
+    end
+  end
+
   def self.socketify_env!
     Einhorn::State.bind.each do |host, port, flags|
       fd = bind(host, port, flags)
@@ -268,6 +311,7 @@ module Einhorn
     end
 
     set_master_ps_name
+    renice_self
     preload
 
     # In the middle of upgrading
