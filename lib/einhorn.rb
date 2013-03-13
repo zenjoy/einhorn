@@ -58,7 +58,7 @@ module Einhorn
         :lockfile => nil,
         :consecutive_deaths_before_ack => 0,
         :last_upgraded => nil,
-        :working_directory => nil
+        :working_directory => nil,
         :nice => {:master => nil, :worker => nil, :renice_cmd => '/usr/bin/renice'}
       }
     end
