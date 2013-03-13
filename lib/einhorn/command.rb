@@ -1,6 +1,7 @@
 require 'pp'
 require 'set'
 require 'tmpdir'
+require "base64"
 
 require 'einhorn/command/interface'
 
@@ -95,6 +96,17 @@ module Einhorn
       spec[:acked] = true
       Einhorn.log_info("Up to #{Einhorn::WorkerPool.ack_count} / #{Einhorn::WorkerPool.ack_target} #{Einhorn::State.ack_mode[:type]} ACKs#{extra}")
       # Could call cull here directly instead, I believe.
+
+      ## kill old master, if it exists
+      old_pid = "#{Einhorn::State.pidfile}.old"
+      if File.exists?(old_pid) && Einhorn::State.pidfile != old_pid
+        begin
+          Process.kill("QUIT", File.read(old_pid).to_i)
+        rescue Errno::ENOENT, Errno::ESRCH
+          # someone else did our job for us
+        end
+      end
+
       Einhorn::Event.break_loop
     end
 
@@ -175,29 +187,20 @@ module Einhorn
       # In case there's anything lurking
       $stdout.flush
 
-      # Spawn a child to pass the state through the pipe
-      read, write = IO.pipe
-      fork do
-        Einhorn::TransientState.whatami = :state_passer
-        Einhorn::State.generation += 1
-        Einhorn::State.children[$$] = {
-          :type => :state_passer
-        }
-        read.close
-
-        write.write(YAML.dump(dumpable_state))
-        write.close
-
-        exit(0)
-      end
-      write.close
+      state_to_pass =  Base64.encode64(Marshal.dump(dumpable_state))
 
       # Reload the original environment
       ENV.clear
       ENV.update(Einhorn::TransientState.environ)
 
       begin
-        exec [Einhorn::TransientState.script_name, Einhorn::TransientState.script_name], *(['--with-state-fd', read.fileno.to_s, '--'] + Einhorn::State.cmd)
+        listener_fds = Hash[Einhorn::Event.persistent_descriptors.map do |descriptor|
+          sock = descriptor.to_io
+          [ sock.fileno, sock ]
+        end]
+        cmd = [Einhorn::TransientState.script_name, Einhorn::TransientState.script_name], *(['--with-state-fd', state_to_pass, '--'] + Einhorn::State.cmd)
+        cmd << listener_fds
+        exec(*cmd)
       rescue SystemCallError => e
         Einhorn.log_error("Could not reload! Attempting to continue. Error was: #{e}")
         Einhorn::State.reloading_for_preload_upgrade = false
@@ -233,7 +236,15 @@ module Einhorn
           Einhorn::Event.close_all_for_worker
 
           prepare_child_environment
-          exec [cmd[0], cmd[0]], *cmd[1..-1]
+
+          listener_fds = Hash[Einhorn::Event.persistent_descriptors.map do |descriptor|
+            sock = descriptor.to_io
+            [ sock.fileno, sock ]
+          end]
+          child_cmd = [cmd[0], cmd[0]], *cmd[1..-1]
+          child_cmd << listener_fds
+
+          exec(*child_cmd)
         end
       end
 
@@ -332,13 +343,13 @@ module Einhorn
       old_workers = Einhorn::WorkerPool.old_workers
       if !Einhorn::State.upgrading && old_workers.length > 0
         Einhorn.log_info("Killing off #{old_workers.length} old workers.")
-        signal_all("QUIT", old_workers)
+        signal_all("SIGKILL", old_workers)
       end
 
       if acked > target
         excess = Einhorn::WorkerPool.acked_unsignaled_modern_workers[0...(acked-target)]
         Einhorn.log_info("Have too many workers at the current version, so killing off #{excess.length} of them.")
-        signal_all("QUIT", excess)
+        signal_all("SIGKILL", excess)
       end
     end
 

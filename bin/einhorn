@@ -3,6 +3,7 @@
 
 require 'rubygems'
 require 'einhorn'
+require "base64"
 
 module Einhorn
   module Executable
@@ -288,12 +289,9 @@ if true # $0 == __FILE__
       Einhorn::State.nice[:renice_cmd] = renice_cmd if renice_cmd
     end
 
-    opts.on('--with-state-fd STATE', '[Internal option] With file descriptor containing state') do |fd|
+    opts.on('--with-state-fd STATE', '[Internal option] With file descriptor containing state') do |state|
       Einhorn::TransientState.stateful = true
-      read = IO.for_fd(Integer(fd))
-      state = read.read
-      read.close
-
+      state = Marshal.load( Base64.decode64(state) )
       Einhorn.restore_state(state)
     end
 

@@ -51,7 +51,7 @@ module Einhorn
         :generation => 0,
         :last_spinup => nil,
         :ack_mode => {:type => :timer, :timeout => 1},
-        :kill_children_on_exit => false,
+        :kill_children_on_exit => true,
         :command_socket_as_fd => false,
         :socket_path => nil,
         :pidfile => nil,
@@ -82,12 +82,11 @@ module Einhorn
   end
 
   def self.restore_state(state)
-    parsed = YAML.load(state)
-    updated_state, message = update_state(parsed[:state])
+    updated_state, message = update_state(state[:state])
     Einhorn::State.state = updated_state
-    Einhorn::Event.restore_persistent_descriptors(parsed[:persistent_descriptors])
+    Einhorn::Event.restore_persistent_descriptors(state[:persistent_descriptors])
     # Do this after setting state so verbosity is right
-    Einhorn.log_info("Using loaded state: #{parsed.inspect}")
+    Einhorn.log_info("Using loaded state: #{state.inspect}")
     Einhorn.log_info(message) if message
   end
 
@@ -310,6 +309,7 @@ module Einhorn
       socketify!(Einhorn::State.cmd)
     end
 
+    Einhorn::Command::Interface.write_pidfile
     set_master_ps_name
     renice_self
     preload

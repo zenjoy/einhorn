@@ -95,7 +95,7 @@ module Einhorn::Command
 
     def self.write_pidfile
       file = pidfile
-      Einhorn.log_info("Writing PID to #{file}")
+      Einhorn.log_info("Writing PID (#{$$}) to #{file}")
       File.open(file, 'w') {|f| f.write($$)}
     end
 
@@ -148,7 +148,7 @@ module Einhorn::Command
     ## Signals
     def self.install_handlers
       Signal.trap("INT") do
-        Einhorn::Command.signal_all("QUIT", Einhorn::WorkerPool.workers)
+        Einhorn::Command.signal_all("INT", Einhorn::WorkerPool.workers)
         Einhorn::State.respawn = false
       end
       Signal.trap("TERM") do
